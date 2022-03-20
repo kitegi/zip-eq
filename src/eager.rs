@@ -1,5 +1,5 @@
-use std::iter::{FusedIterator, TrustedLen};
-use std::ops::Try;
+use core::iter::{FusedIterator, TrustedLen};
+use core::ops::Try;
 
 /// Iterator that zips two iterators, checking that they have the same length during
 /// construction.
@@ -9,12 +9,31 @@ pub struct ZipEqEagerCheck<A, B> {
     pub(crate) b: B,
 }
 
+#[inline(always)]
+unsafe fn unreachable_unchecked() -> ! {
+    #[cfg(not(debug_assertions))]
+    unsafe {
+        core::hint::unreachable_unchecked()
+    }
+    #[cfg(debug_assertions)]
+    unreachable!()
+}
+
+#[inline(always)]
+unsafe fn both_or_none<T, U>(t: Option<T>, u: Option<U>) -> Option<(T, U)> {
+    match (t, u) {
+        (Some(a), Some(b)) => Some((a, b)),
+        (None, None) => None,
+        _ => unsafe { unreachable_unchecked() },
+    }
+}
+
 // SAFETY: a and b have the same length
 impl<A: Iterator, B: Iterator> Iterator for ZipEqEagerCheck<A, B> {
     type Item = (A::Item, B::Item);
 
     fn next(&mut self) -> Option<Self::Item> {
-        unsafe { self.a.next().map(|a| (a, self.b.next().unwrap_unchecked())) }
+        unsafe { both_or_none(self.a.next(), self.b.next()) }
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -26,53 +45,62 @@ impl<A: Iterator, B: Iterator> Iterator for ZipEqEagerCheck<A, B> {
     }
 
     fn last(self) -> Option<Self::Item> {
-        unsafe { self.a.last().map(|a| (a, self.b.last().unwrap_unchecked())) }
+        unsafe { both_or_none(self.a.last(), self.b.last()) }
     }
 
     fn nth(&mut self, n: usize) -> Option<Self::Item> {
-        unsafe { self.a.nth(n).map(|a| (a, self.b.nth(n).unwrap_unchecked())) }
+        unsafe { both_or_none(self.a.nth(n), self.b.nth(n)) }
     }
 
+    #[inline(always)]
     fn fold<I, F: FnMut(I, Self::Item) -> I>(self, init: I, mut f: F) -> I {
         let mut b = self.b;
-        unsafe {
-            self.a.fold(init, move |init, a| {
-                f(init, (a, b.next().unwrap_unchecked()))
-            })
-        }
+        self.a.fold(init, move |init, a| {
+            f(
+                init,
+                (
+                    a,
+                    match b.next() {
+                        Some(b) => b,
+                        None => unsafe { unreachable_unchecked() },
+                    },
+                ),
+            )
+        })
     }
 
+    #[inline(always)]
     fn try_fold<I, F: FnMut(I, Self::Item) -> R, R>(&mut self, init: I, mut f: F) -> R
     where
         R: Try<Output = I>,
     {
         let b = &mut self.b;
-        unsafe {
-            self.a.try_fold(init, move |init: I, a: A::Item| {
-                f(init, (a, b.next().unwrap_unchecked()))
-            })
-        }
+        self.a.try_fold(init, move |init: I, a: A::Item| {
+            f(
+                init,
+                (
+                    a,
+                    match b.next() {
+                        Some(b) => b,
+                        None => unsafe { unreachable_unchecked() },
+                    },
+                ),
+            )
+        })
     }
 }
 
 // SAFETY: a and b have the same length
 impl<A: DoubleEndedIterator, B: DoubleEndedIterator> DoubleEndedIterator for ZipEqEagerCheck<A, B> {
     fn next_back(&mut self) -> Option<Self::Item> {
-        unsafe {
-            self.a
-                .next_back()
-                .map(|a| (a, self.b.next_back().unwrap_unchecked()))
-        }
+        unsafe { both_or_none(self.a.next_back(), self.b.next_back()) }
     }
 
     fn nth_back(&mut self, n: usize) -> Option<Self::Item> {
-        unsafe {
-            self.a
-                .nth_back(n)
-                .map(|a| (a, self.b.nth_back(n).unwrap_unchecked()))
-        }
+        unsafe { both_or_none(self.a.nth_back(n), self.b.nth_back(n)) }
     }
 
+    #[inline(always)]
     fn try_rfold<I, F, R>(&mut self, init: I, mut f: F) -> R
     where
         Self: Sized,
@@ -80,24 +108,39 @@ impl<A: DoubleEndedIterator, B: DoubleEndedIterator> DoubleEndedIterator for Zip
         R: Try<Output = I>,
     {
         let b = &mut self.b;
-        unsafe {
-            self.a.try_rfold(init, move |init: I, a: A::Item| {
-                f(init, (a, b.next_back().unwrap_unchecked()))
-            })
-        }
+        self.a.try_rfold(init, move |init: I, a: A::Item| {
+            f(
+                init,
+                (
+                    a,
+                    match b.next_back() {
+                        Some(b) => b,
+                        None => unsafe { unreachable_unchecked() },
+                    },
+                ),
+            )
+        })
     }
 
+    #[inline(always)]
     fn rfold<I, F>(self, init: I, mut f: F) -> I
     where
         Self: Sized,
         F: FnMut(I, Self::Item) -> I,
     {
         let mut b = self.b;
-        unsafe {
-            self.a.rfold(init, move |init, a| {
-                f(init, (a, b.next_back().unwrap_unchecked()))
-            })
-        }
+        self.a.rfold(init, move |init, a| {
+            f(
+                init,
+                (
+                    a,
+                    match b.next_back() {
+                        Some(b) => b,
+                        None => unsafe { unreachable_unchecked() },
+                    },
+                ),
+            )
+        })
     }
 }
 

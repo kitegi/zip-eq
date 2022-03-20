@@ -1,5 +1,6 @@
 #![feature(trusted_len)]
 #![feature(try_trait_v2)]
+#![deny(unsafe_op_in_unsafe_fn)]
 
 use std::iter::TrustedLen;
 
@@ -9,6 +10,8 @@ mod lazy;
 pub use eager::*;
 pub use lazy::*;
 
+#[inline(always)]
+#[cold]
 fn panic_different_len() -> ! {
     panic!("ZipEq: Reached the end of one of the iterators before the other.");
 }
