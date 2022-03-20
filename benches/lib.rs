@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use zip_strict::Zip;
+use zip_eq::Zip;
 
 fn add_slices_std(out: &mut [f64], a: &[f64], b: &[f64]) {
     out.iter_mut()
