@@ -1,6 +1,11 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use std::collections::{
+    vec_deque::{Iter, IterMut},
+    VecDeque,
+};
 use zip_eq::Zip;
 
+#[inline(never)]
 fn add_slices_std(out: &mut [f64], a: &[f64], b: &[f64]) {
     out.iter_mut()
         .zip(a)
@@ -8,6 +13,7 @@ fn add_slices_std(out: &mut [f64], a: &[f64], b: &[f64]) {
         .for_each(|((o, a), b)| *o = *a + *b);
 }
 
+#[inline(never)]
 fn add_slices_eager(out: &mut [f64], a: &[f64], b: &[f64]) {
     out.iter_mut()
         .zip_eq_eager(a)
@@ -15,6 +21,7 @@ fn add_slices_eager(out: &mut [f64], a: &[f64], b: &[f64]) {
         .for_each(|((o, a), b)| *o = *a + *b);
 }
 
+#[inline(never)]
 fn add_slices_lazy(out: &mut [f64], a: &[f64], b: &[f64]) {
     out.iter_mut()
         .zip_eq_eager(a)
@@ -22,28 +29,21 @@ fn add_slices_lazy(out: &mut [f64], a: &[f64], b: &[f64]) {
         .for_each(|((o, a), b)| *o = *a + *b);
 }
 
-fn add_slices_std_chunked(out: &mut [f64], a: &[f64], b: &[f64]) {
-    out.chunks_mut(64)
-        .flatten()
-        .zip(a)
-        .zip(b)
+#[inline(never)]
+fn add_slices_std_chunked(out: IterMut<'_, f64>, a: Iter<'_, f64>, b: Iter<'_, f64>) {
+    out.zip(a).zip(b).for_each(|((o, a), b)| *o = *a + *b);
+}
+
+#[inline(never)]
+fn add_slices_zip_chunked(out: IterMut<'_, f64>, a: Iter<'_, f64>, b: Iter<'_, f64>) {
+    out.zip_eq_eager(a)
+        .zip_eq_eager(b)
         .for_each(|((o, a), b)| *o = *a + *b);
 }
 
-fn add_slices_zip_chunked(out: &mut [f64], a: &[f64], b: &[f64]) {
-    unsafe {
-        out.chunks_mut(64)
-            .flatten()
-            .zip_eq_unchecked(a)
-            .zip_eq_unchecked(b)
-    }
-    .for_each(|((o, a), b)| *o = *a + *b);
-}
-
-fn add_slices_zip_lazy_chunked(out: &mut [f64], a: &[f64], b: &[f64]) {
-    out.chunks_mut(64)
-        .flatten()
-        .zip_eq_lazy(a)
+#[inline(never)]
+fn add_slices_zip_lazy_chunked(out: IterMut<'_, f64>, a: Iter<'_, f64>, b: Iter<'_, f64>) {
+    out.zip_eq_lazy(a)
         .zip_eq_lazy(b)
         .for_each(|((o, a), b)| *o = *a + *b);
 }
@@ -65,14 +65,36 @@ fn criterion_benchmark(c: &mut Criterion) {
         b.iter(|| add_slices_lazy(black_box(&mut out), black_box(&lhs), black_box(&rhs)))
     });
 
+    let mut out: VecDeque<_> = vec![0.0; n].into();
+    let lhs: VecDeque<_> = vec![0.0; n].into();
+    let rhs: VecDeque<_> = vec![0.0; n].into();
+
     c.bench_function("add chunks std", |b| {
-        b.iter(|| add_slices_std_chunked(black_box(&mut out), black_box(&lhs), black_box(&rhs)))
+        b.iter(|| {
+            add_slices_std_chunked(
+                black_box(out.iter_mut()),
+                black_box(lhs.iter()),
+                black_box(rhs.iter()),
+            )
+        })
     });
-    c.bench_function("add chunks zip", |b| {
-        b.iter(|| add_slices_zip_chunked(black_box(&mut out), black_box(&lhs), black_box(&rhs)))
+    c.bench_function("add chunks eager", |b| {
+        b.iter(|| {
+            add_slices_zip_chunked(
+                black_box(out.iter_mut()),
+                black_box(lhs.iter()),
+                black_box(rhs.iter()),
+            )
+        })
     });
-    c.bench_function("add chunks zip lazy", |b| {
-        b.iter(|| add_slices_zip_lazy_chunked(black_box(&mut out), black_box(&lhs), black_box(&rhs)))
+    c.bench_function("add chunks lazy", |b| {
+        b.iter(|| {
+            add_slices_zip_lazy_chunked(
+                black_box(out.iter_mut()),
+                black_box(lhs.iter()),
+                black_box(rhs.iter()),
+            )
+        })
     });
 }
 

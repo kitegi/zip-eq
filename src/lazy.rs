@@ -11,8 +11,8 @@ pub struct ZipEqLazyCheck<A, B> {
 
 fn both_or_none<T, U>(t: Option<T>, u: Option<U>) -> Option<(T, U)> {
     match (t, u) {
-        (None, None) => None,
         (Some(a), Some(b)) => Some((a, b)),
+        (None, None) => None,
         _ => super::panic_different_len(),
     }
 }
