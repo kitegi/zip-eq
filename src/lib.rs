@@ -7,7 +7,8 @@
 //! Two types of iterators are provided. The first one that checks that the sizes are equal
 //! eagerly at the moment it's constructed. This can be checked when the iterators' lengths
 //! can be known and trusted to be exact (See [`core::iter::TrustedLen`] for more details).
-//! This is done using [`ZipEq::zip_eq_eager`].  
+//! This is done using [`ZipEq::zip_eq_eager`]. Eagerly checking that the lengths are equal
+//! allows the implementation to elide some bound checks, leading to faster code.  
 //! Or in the case where the user knows for certain that the lengths are equal, the check can be
 //! avoided with the unsafe method [`ZipEq::zip_eq_unchecked`].  
 //! The second type of iterator is one that checks that the sizes are equal while it's being
