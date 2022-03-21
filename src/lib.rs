@@ -2,6 +2,63 @@
 #![feature(try_trait_v2)]
 #![deny(unsafe_op_in_unsafe_fn)]
 
+//! Zip iterator that check that its inputs have the same length.
+//!
+//! Two types of iterators are provided. The first one that checks that the sizes are equal
+//! eagerly at the moment it's constructed. This can be checked when the iterators' lengths
+//! can be known and trusted to be exact (See [`core::iter::TrustedLen`] for more details).
+//! This is done using [`ZipEq::zip_eq_eager`].  
+//! Or in the case where the user knows for certain that the lengths are equal, the check can be
+//! avoided with the unsafe method [`ZipEq::zip_eq_unchecked`].  
+//! The second type of iterator is one that checks that the sizes are equal while it's being
+//! iterated over. It can be constructed with [`ZipEq::zip_eq_lazy`].
+//!
+//! # Examples:
+//!
+//! ```
+//! use zip_eq::ZipEq;
+//!
+//! let a = [1, 2];
+//! let b = [3, 4];
+//! let mut zipped = a.zip_eq_lazy(b);
+//!
+//! assert_eq!(zipped.next(), Some((1, 3)));
+//! assert_eq!(zipped.next(), Some((2, 4)));
+//! assert_eq!(zipped.next(), None);
+//! ```
+//!
+//! ```
+//! use zip_eq::ZipEq;
+//!
+//! let a = [1, 2];
+//! let b = [3, 4];
+//! let mut zipped = a.zip_eq_eager(b);
+//!
+//! assert_eq!(zipped.next(), Some((1, 3)));
+//! assert_eq!(zipped.next(), Some((2, 4)));
+//! assert_eq!(zipped.next(), None);
+//! ```
+//!
+//! ```should_panic
+//! use zip_eq::ZipEq;
+//!
+//! let a = [1, 2, 3];
+//! let b = [3, 4];
+//! let mut zipped = a.zip_eq_eager(b); // length equality check happens here.
+//! ```
+//!
+//! ```should_panic
+//! use zip_eq::ZipEq;
+//!
+//! let a = [1, 2, 3];
+//! let b = [3, 4];
+//! let mut zipped = a.zip_eq_lazy(b);
+//!
+//! assert_eq!(zipped.next(), Some((1, 3)));
+//! assert_eq!(zipped.next(), Some((2, 4)));
+//! zipped.next(); // length equality check happens here.
+//! ```
+
 use std::iter::TrustedLen;
 
 mod eager;
@@ -10,7 +67,6 @@ mod lazy;
 pub use eager::*;
 pub use lazy::*;
 
-#[inline(always)]
 #[cold]
 fn panic_different_len() -> ! {
     panic!("ZipEq: Reached the end of one of the iterators before the other.");
@@ -21,12 +77,15 @@ fn size_hint_impl(a: (usize, Option<usize>), b: (usize, Option<usize>)) -> (usiz
         a.0.max(b.0),
         match (a.1, b.1) {
             (Some(a), Some(b)) => Some(a.min(b)),
-            (a, b) => a.or(b),
+            (Some(a), None) => Some(a),
+            (None, Some(b)) => Some(b),
+            (None, None) => None,
         },
     )
 }
 
-pub trait Zip {
+/// Trait that adds `zip_eq_*` builder functions to objects that are convertible to iterators
+pub trait ZipEq {
     /// Returns a zipped iterator without checking that the lengths of the iterators are equal.
     /// The behavior is undefined if the iterators don't have the same length.
     unsafe fn zip_eq_unchecked<B>(self, b: B) -> ZipEqEagerCheck<Self::IntoIter, B::IntoIter>
@@ -56,7 +115,7 @@ pub trait Zip {
         B: IntoIterator;
 }
 
-impl<A: IntoIterator> Zip for A {
+impl<A: IntoIterator> ZipEq for A {
     unsafe fn zip_eq_unchecked<B>(self, b: B) -> ZipEqEagerCheck<A::IntoIter, B::IntoIter>
     where
         A: IntoIterator,

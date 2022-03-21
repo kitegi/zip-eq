@@ -9,7 +9,7 @@ use std::{
     },
     str::Chars,
 };
-use zip_eq::Zip;
+use zip_eq::ZipEq;
 
 #[inline(never)]
 fn add_slices_std(out: &mut [f64], a: &[f64], b: &[f64]) {

@@ -9,7 +9,7 @@ pub struct ZipEqEagerCheck<A, B> {
     pub(crate) b: B,
 }
 
-#[inline(always)]
+#[inline]
 unsafe fn unreachable_unchecked() -> ! {
     #[cfg(not(debug_assertions))]
     unsafe {
@@ -19,7 +19,7 @@ unsafe fn unreachable_unchecked() -> ! {
     unreachable!()
 }
 
-#[inline(always)]
+#[inline]
 unsafe fn both_or_none<T, U>(t: Option<T>, u: Option<U>) -> Option<(T, U)> {
     match (t, u) {
         (Some(a), Some(b)) => Some((a, b)),
@@ -40,10 +40,6 @@ impl<A: Iterator, B: Iterator> Iterator for ZipEqEagerCheck<A, B> {
         super::size_hint_impl(self.a.size_hint(), self.b.size_hint())
     }
 
-    fn count(self) -> usize {
-        self.a.count()
-    }
-
     fn last(self) -> Option<Self::Item> {
         unsafe { both_or_none(self.a.last(), self.b.last()) }
     }
@@ -52,7 +48,7 @@ impl<A: Iterator, B: Iterator> Iterator for ZipEqEagerCheck<A, B> {
         unsafe { both_or_none(self.a.nth(n), self.b.nth(n)) }
     }
 
-    #[inline(always)]
+    #[inline]
     fn fold<I, F: FnMut(I, Self::Item) -> I>(self, init: I, mut f: F) -> I {
         let mut b = self.b;
         self.a.fold(init, move |init, a| {
@@ -69,7 +65,7 @@ impl<A: Iterator, B: Iterator> Iterator for ZipEqEagerCheck<A, B> {
         })
     }
 
-    #[inline(always)]
+    #[inline]
     fn try_fold<I, F: FnMut(I, Self::Item) -> R, R>(&mut self, init: I, mut f: F) -> R
     where
         R: Try<Output = I>,
@@ -100,7 +96,7 @@ impl<A: DoubleEndedIterator, B: DoubleEndedIterator> DoubleEndedIterator for Zip
         unsafe { both_or_none(self.a.nth_back(n), self.b.nth_back(n)) }
     }
 
-    #[inline(always)]
+    #[inline]
     fn try_rfold<I, F, R>(&mut self, init: I, mut f: F) -> R
     where
         Self: Sized,
@@ -122,7 +118,7 @@ impl<A: DoubleEndedIterator, B: DoubleEndedIterator> DoubleEndedIterator for Zip
         })
     }
 
-    #[inline(always)]
+    #[inline]
     fn rfold<I, F>(self, init: I, mut f: F) -> I
     where
         Self: Sized,
